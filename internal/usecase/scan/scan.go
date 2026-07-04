@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jatibroski/sws-scanner-service/internal/infrastructure/anthropic"
 	firebaseinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/firebase"
@@ -16,10 +17,10 @@ const cacheVersion = "v14-scn69-don-poison-jp-cn-fix"
 
 // UseCase orchestrates the card-scanning pipeline.
 type UseCase struct {
-	anthropic   *anthropic.Client
-	vision      *vision.Client
-	firestore   *firebaseinfra.Firestore
-	storage     *firebaseinfra.Storage
+	anthropic    *anthropic.Client
+	vision       *vision.Client
+	firestore    *firebaseinfra.Firestore
+	storage      *firebaseinfra.Storage
 	cacheVersion string
 }
 
@@ -31,10 +32,10 @@ func NewScanUseCase(
 	storage *firebaseinfra.Storage,
 ) *UseCase {
 	return &UseCase{
-		anthropic:   anthropicClient,
-		vision:      visionClient,
-		firestore:   firestore,
-		storage:     storage,
+		anthropic:    anthropicClient,
+		vision:       visionClient,
+		firestore:    firestore,
+		storage:      storage,
 		cacheVersion: cacheVersion,
 	}
 }
@@ -79,11 +80,11 @@ func (uc *UseCase) Scan(ctx context.Context, req ScanRequest, userID string) (*S
 				v.DocKey = parent.Ref.ID
 				v.Data = parent.Data()
 				return &ScanResponse{
-					OK:        true,
-					Card:      verifiedToCard(&v),
-					PHash:     pHash,
+					OK:           true,
+					Card:         verifiedToCard(&v),
+					PHash:        pHash,
 					IdentifiedBy: "phash-community",
-					Hash:      hash,
+					Hash:         hash,
 				}, nil
 			}
 		}
@@ -201,7 +202,7 @@ func (uc *UseCase) Scan(ctx context.Context, req ScanRequest, userID string) (*S
 	}
 
 	// Verified lookup
-	var verified *VerifiedResult
+	var verified interface{}
 	if card.Code != "" && card.Rarity != "" && uc.firestore != nil {
 		key := makeVerifiedKey(card.Code, card.Rarity)
 		v, err := uc.firestore.GetVerifiedCard(ctx, key)
@@ -209,12 +210,7 @@ func (uc *UseCase) Scan(ctx context.Context, req ScanRequest, userID string) (*S
 			v, _ = uc.firestore.GetVerifiedCard(ctx, makeVerifiedKey(card.Code, "base"))
 		}
 		if v != nil {
-			verified = &VerifiedResult{
-				DocKey: v.DocKey,
-				Code:   v.Code,
-				Rarity: v.Rarity,
-				Data:   v.Data,
-			}
+			verified = normalizeVerified(v, req.Lang)
 		}
 	}
 
@@ -293,6 +289,77 @@ func stripDataURL(dataURL string) string {
 		return dataURL[idx+1:]
 	}
 	return dataURL
+}
+
+func selectVerifiedImageURL(v *firebaseinfra.VerifiedCardDoc, lang string) string {
+	if v == nil {
+		return ""
+	}
+	d := v.Data
+	if d == nil {
+		d = map[string]interface{}{}
+	}
+	if u, ok := d["watermarkedSampleUrl"].(string); ok && u != "" {
+		return u
+	}
+	if u, ok := d["sampleImageUrl"].(string); ok && u != "" {
+		return u
+	}
+	if u, ok := d["officialImageUrl"].(string); ok && u != "" {
+		return u
+	}
+	if samples, ok := d["samples"].(map[string]interface{}); ok {
+		for _, k := range []string{strings.ToUpper(lang), "JP", "EN", "CN"} {
+			if u, ok := samples[k].(string); ok && u != "" {
+				return u
+			}
+		}
+	}
+	return ""
+}
+
+func normalizeVerified(v *firebaseinfra.VerifiedCardDoc, lang string) map[string]interface{} {
+	if v == nil {
+		return nil
+	}
+	d := v.Data
+	if d == nil {
+		d = map[string]interface{}{}
+	}
+
+	langKey := strings.ToUpper(lang)
+	imageURL := d["watermarkedSampleUrl"]
+	if imageURL == nil || imageURL == "" {
+		imageURL = d["sampleImageUrl"]
+	}
+	if imageURL == nil || imageURL == "" {
+		imageURL = d["officialImageUrl"]
+	}
+	if imageURL == nil || imageURL == "" {
+		if samples, ok := d["samples"].(map[string]interface{}); ok {
+			for _, k := range []string{langKey, "JP", "EN", "CN"} {
+				if u, ok := samples[k].(string); ok && u != "" {
+					imageURL = u
+					break
+				}
+			}
+		}
+	}
+
+	lastVerified := d["lastVerifiedAt"]
+	if t, ok := lastVerified.(time.Time); ok {
+		lastVerified = t.Format(time.RFC3339)
+	}
+
+	return map[string]interface{}{
+		"sampleImageUrl":      imageURL,
+		"officialImageUrl":    d["officialImageUrl"],
+		"officialName":        d["officialName"],
+		"officialSetName":     d["officialSetName"],
+		"officialReleaseDate": d["officialReleaseDate"],
+		"verificationCount":   d["verificationCount"],
+		"lastVerifiedAt":      lastVerified,
+	}
 }
 
 func makeVerifiedKey(code, rarity string) string {

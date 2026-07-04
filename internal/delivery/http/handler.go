@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -9,28 +10,28 @@ import (
 	firebaseinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/firebase"
 	natsinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/nats"
 	auctionuc "github.com/jatibroski/sws-scanner-service/internal/usecase/auctions"
+	contributionsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/contributions"
 	marketplaceuc "github.com/jatibroski/sws-scanner-service/internal/usecase/marketplace"
 	pricinguc "github.com/jatibroski/sws-scanner-service/internal/usecase/pricing"
 	scanuc "github.com/jatibroski/sws-scanner-service/internal/usecase/scan"
 	utilityuc "github.com/jatibroski/sws-scanner-service/internal/usecase/utility"
 	variantsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/variants"
 	visualmatchuc "github.com/jatibroski/sws-scanner-service/internal/usecase/visualmatch"
-	contributionsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/contributions"
 )
 
 // Handler holds HTTP handlers for the scanner service.
 type Handler struct {
-	cfg          *config.Config
-	pool         *pgxpool.Pool
-	firebase     *firebaseinfra.App
-	publisher    *natsinfra.Publisher
-	scanUC       *scanuc.UseCase
-	variantsUC   *variantsuc.UseCase
-	pricingUC    *pricinguc.UseCase
-	utilityUC    *utilityuc.UseCase
-	marketplaceUC *marketplaceuc.UseCase
-	auctionsUC   *auctionuc.UseCase
-	visualMatchUC *visualmatchuc.UseCase
+	cfg             *config.Config
+	pool            *pgxpool.Pool
+	firebase        *firebaseinfra.App
+	publisher       *natsinfra.Publisher
+	scanUC          *scanuc.UseCase
+	variantsUC      *variantsuc.UseCase
+	pricingUC       *pricinguc.UseCase
+	utilityUC       *utilityuc.UseCase
+	marketplaceUC   *marketplaceuc.UseCase
+	auctionsUC      *auctionuc.UseCase
+	visualMatchUC   *visualmatchuc.UseCase
 	contributionsUC *contributionsuc.UseCase
 }
 
@@ -59,7 +60,7 @@ func NewHandler(
 		pricingUC:       pricingUC,
 		utilityUC:       utilityUC,
 		marketplaceUC:   marketplaceUC,
-		auctionsUC:       auctionsUC,
+		auctionsUC:      auctionsUC,
 		visualMatchUC:   visualMatchUC,
 		contributionsUC: contributionsUC,
 	}
@@ -104,13 +105,26 @@ func (h *Handler) notImplemented(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, gin.H{"error": "NOT_IMPLEMENTED"})
 }
 
-// WhoAmI echoes back the authenticated user ID.
+// WhoAmI echoes back the authenticated user identity.
 func (h *Handler) WhoAmI(c *gin.Context) {
-	userID := h.currentUser(c)
-	if userID == "" {
-		userID = "anonymous"
+	uid := h.currentUser(c)
+	if uid == "" {
+		uid = "anonymous"
 	}
-	c.JSON(http.StatusOK, gin.H{"user_id": userID})
+	if uid == "anonymous" {
+		c.JSON(http.StatusOK, gin.H{"ok": true, "signedIn": false, "uid": "anonymous", "email": nil, "isAdmin": false})
+		return
+	}
+
+	email := h.currentUserEmail(c)
+	isAdmin := false
+	for _, admin := range h.cfg.AdminEmails {
+		if strings.EqualFold(strings.TrimSpace(admin), email) {
+			isAdmin = true
+			break
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "signedIn": true, "uid": uid, "email": email, "isAdmin": isAdmin})
 }
 
 // currentUser extracts the user ID from X-User-ID header or Firebase token.

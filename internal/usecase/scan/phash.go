@@ -9,12 +9,15 @@ import (
 
 // PHashMatch represents a single perceptual-hash match.
 type PHashMatch struct {
-	DocKey     string                 `json:"docKey"`
-	Code       string                 `json:"code"`
-	Rarity     string                 `json:"rarity"`
-	Distance   int                    `json:"distance"`
-	Confidence float64                `json:"confidence"`
-	Data       map[string]interface{} `json:"data"`
+	DocKey      string                 `json:"docKey"`
+	Code        string                 `json:"code"`
+	Rarity      string                 `json:"rarity"`
+	ImageURL    string                 `json:"imageUrl"`
+	Distance    int                    `json:"distance"`
+	Confidence  float64                `json:"confidence"`
+	FromDb      bool                   `json:"fromDb"`
+	Watermarked bool                   `json:"watermarked"`
+	Data        map[string]interface{} `json:"data"`
 }
 
 // PHashResponse is the output of a pHash lookup.
@@ -22,19 +25,20 @@ type PHashResponse struct {
 	OK       bool         `json:"ok"`
 	Matches  []PHashMatch `json:"matches"`
 	UserHash string       `json:"userHash"`
-	Scanned  bool         `json:"scanned"`
+	Scanned  int          `json:"scanned"`
+	Degraded bool         `json:"degraded,omitempty"`
 	Reason   string       `json:"reason,omitempty"`
 }
 
 // PHashLookup finds visually similar verified cards.
 func (uc *UseCase) PHashLookup(ctx context.Context, image string) (*PHashResponse, error) {
 	if uc.firestore == nil {
-		return &PHashResponse{OK: false, Reason: "firestore not initialized"}, nil
+		return &PHashResponse{OK: true, Matches: []PHashMatch{}, Degraded: true, Reason: "firestore not initialized"}, nil
 	}
 
 	userHash, err := AverageHash(image)
 	if err != nil {
-		return &PHashResponse{OK: false, Reason: err.Error()}, nil
+		return &PHashResponse{OK: true, Matches: []PHashMatch{}, Degraded: true, Reason: err.Error()}, nil
 	}
 
 	candidates, err := uc.firestore.FindVerifiedCardsWithPHash(ctx, 5000)
@@ -54,12 +58,15 @@ func (uc *UseCase) PHashLookup(ctx context.Context, image string) (*PHashRespons
 				conf = 0
 			}
 			matches = append(matches, PHashMatch{
-				DocKey:     v.DocKey,
-				Code:       v.Code,
-				Rarity:     v.Rarity,
-				Distance:   dist,
-				Confidence: conf,
-				Data:       v.Data,
+				DocKey:      v.DocKey,
+				Code:        v.Code,
+				Rarity:      v.Rarity,
+				ImageURL:    selectVerifiedImageURL(v, ""),
+				Distance:    dist,
+				Confidence:  conf,
+				FromDb:      true,
+				Watermarked: true,
+				Data:        v.Data,
 			})
 		}
 	}
@@ -75,7 +82,7 @@ func (uc *UseCase) PHashLookup(ctx context.Context, image string) (*PHashRespons
 		OK:       true,
 		Matches:  matches,
 		UserHash: userHash,
-		Scanned:  true,
+		Scanned:  len(candidates),
 	}, nil
 }
 

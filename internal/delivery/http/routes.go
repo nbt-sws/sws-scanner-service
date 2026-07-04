@@ -2,12 +2,13 @@ package http
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	auctionuc "github.com/jatibroski/sws-scanner-service/internal/usecase/auctions"
 	contributionsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/contributions"
-	marketplaceuc "github.com/jatibroski/sws-scanner-service/internal/usecase/marketplace"
 	scannerimage "github.com/jatibroski/sws-scanner-service/internal/usecase/image"
+	marketplaceuc "github.com/jatibroski/sws-scanner-service/internal/usecase/marketplace"
 	scanuc "github.com/jatibroski/sws-scanner-service/internal/usecase/scan"
 	utilityuc "github.com/jatibroski/sws-scanner-service/internal/usecase/utility"
 	variantsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/variants"
@@ -75,12 +76,41 @@ func (h *Handler) VisualMatch(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "details": err.Error()})
 		return
 	}
+	baseURL := absoluteBaseURL(c)
+	req.ReferenceImageURL = resolveRelativeURL(req.ReferenceImageURL, baseURL)
+	for i := range req.Candidates {
+		req.Candidates[i].ImageURL = resolveRelativeURL(req.Candidates[i].ImageURL, baseURL)
+	}
 	resp, err := h.visualMatchUC.Match(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "INTERNAL_ERROR", "details": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func absoluteBaseURL(c *gin.Context) string {
+	scheme := c.Request.URL.Scheme
+	if scheme == "" {
+		scheme = "http"
+		if c.Request.TLS != nil {
+			scheme = "https"
+		}
+	}
+	return scheme + "://" + c.Request.Host
+}
+
+func resolveRelativeURL(u, base string) string {
+	if u == "" || strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") {
+		return u
+	}
+	if strings.HasPrefix(u, "//") {
+		return "https:" + u
+	}
+	if strings.HasPrefix(u, "/") {
+		return base + u
+	}
+	return u
 }
 
 // ScanPhash performs a perceptual hash lookup.
@@ -131,12 +161,24 @@ func (h *Handler) OPDetails(c *gin.Context) {
 
 // DonCards returns DON card reference data.
 func (h *Handler) DonCards(c *gin.Context) {
-	c.JSON(http.StatusOK, h.variantsUC.DonCatalog())
+	var req variantsuc.DonCardsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "details": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=3600, s-maxage=3600")
+	c.JSON(http.StatusOK, h.variantsUC.DonCards(c.Request.Context(), req))
 }
 
 // CNAnnivCards returns Chinese anniversary card reference data.
 func (h *Handler) CNAnnivCards(c *gin.Context) {
-	c.JSON(http.StatusOK, h.variantsUC.CNAnnivCatalog())
+	var req variantsuc.CNAnnivCardsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "details": err.Error()})
+		return
+	}
+	c.Header("Cache-Control", "public, max-age=3600, s-maxage=3600")
+	c.JSON(http.StatusOK, h.variantsUC.CNAnnivCards(c.Request.Context(), req))
 }
 
 // Contribute accepts a community contribution.
@@ -310,7 +352,7 @@ func (h *Handler) LookupByFilename(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "INVALID_REQUEST", "details": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, h.utilityUC.LookupByFilename(req))
+	c.JSON(http.StatusOK, h.utilityUC.LookupByFilename(c.Request.Context(), req))
 }
 
 // ProxyImage proxies an external image URL.
@@ -318,9 +360,14 @@ func (h *Handler) ProxyImage(c *gin.Context) {
 	url := c.Query("url")
 	data, contentType, err := h.utilityUC.ProxyImage(url)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "PROXY_ERROR", "details": err.Error()})
+		status := http.StatusBadRequest
+		if err.Error() == "host not allowed" {
+			status = http.StatusForbidden
+		}
+		c.JSON(status, gin.H{"ok": false, "error": err.Error()})
 		return
 	}
+	c.Header("Cache-Control", "public, max-age=86400, immutable")
 	c.Data(http.StatusOK, contentType, data)
 }
 
@@ -332,5 +379,6 @@ func (h *Handler) FX(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "FX_ERROR", "details": err.Error()})
 		return
 	}
+	c.Header("Cache-Control", "public, max-age=3600, s-maxage=3600")
 	c.JSON(http.StatusOK, resp)
 }

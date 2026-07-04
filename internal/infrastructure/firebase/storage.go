@@ -8,12 +8,21 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
 )
 
 // Storage provides upload helpers for Firebase Cloud Storage.
 type Storage struct {
 	app    *App
 	bucket string
+}
+
+// Bucket returns the configured storage bucket name.
+func (s *Storage) Bucket() string {
+	if s == nil {
+		return ""
+	}
+	return s.bucket
 }
 
 // NewStorage creates a Storage wrapper.
@@ -126,6 +135,65 @@ func (s *Storage) UploadToPath(ctx context.Context, path, dataURL string, metada
 		return "", fmt.Errorf("make public: %w", err)
 	}
 	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", s.bucket, path), nil
+}
+
+// UploadBytes uploads raw bytes to a storage path and returns the public URL.
+func (s *Storage) UploadBytes(ctx context.Context, path, contentType string, data []byte, metadata map[string]string) (string, error) {
+	if s == nil || s.app == nil {
+		return "", fmt.Errorf("storage not initialized")
+	}
+	client, err := s.app.StorageClient(ctx)
+	if err != nil {
+		return "", fmt.Errorf("storage client: %w", err)
+	}
+	bucket, err := client.Bucket(s.bucket)
+	if err != nil {
+		return "", fmt.Errorf("bucket %s: %w", s.bucket, err)
+	}
+	obj := bucket.Object(path)
+	writer := obj.NewWriter(ctx)
+	writer.ContentType = contentType
+	writer.CacheControl = "public, max-age=31536000, immutable"
+	writer.Metadata = metadata
+	if _, err := writer.Write(data); err != nil {
+		_ = writer.Close()
+		return "", fmt.Errorf("write object: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return "", fmt.Errorf("close writer: %w", err)
+	}
+	if err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+		return "", fmt.Errorf("make public: %w", err)
+	}
+	return fmt.Sprintf("https://storage.googleapis.com/%s/%s", s.bucket, path), nil
+}
+
+// ListObjects returns object names under the given prefix.
+func (s *Storage) ListObjects(ctx context.Context, prefix string) ([]string, error) {
+	if s == nil || s.app == nil {
+		return nil, fmt.Errorf("storage not initialized")
+	}
+	client, err := s.app.StorageClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bucket, err := client.Bucket(s.bucket)
+	if err != nil {
+		return nil, err
+	}
+	iter := bucket.Objects(ctx, &storage.Query{Prefix: prefix})
+	var out []string
+	for {
+		attrs, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, attrs.Name)
+	}
+	return out, nil
 }
 
 // Exists reports whether an object exists at path.

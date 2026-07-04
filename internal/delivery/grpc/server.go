@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net"
 
-	scannerv1 "github.com/jatibroski/sws-shared-protos/gen/go/scanner/v1"
 	"github.com/jatibroski/sws-scanner-service/internal/usecase/scan"
 	"github.com/jatibroski/sws-scanner-service/internal/usecase/variants"
+	scannerv1 "github.com/jatibroski/sws-shared-protos/gen/go/scanner/v1"
 	"google.golang.org/grpc"
 )
 
@@ -72,8 +72,8 @@ func (s *Server) GetVerifiedCard(ctx context.Context, req *scannerv1.GetVerified
 		return nil, fmt.Errorf("%s", res.Error)
 	}
 	samples := map[string]string{}
-	if res.Card != nil {
-		if m, ok := res.Card["samples"].(map[string]interface{}); ok {
+	if res.Details != nil {
+		if m, ok := res.Details["samples"].(map[string]interface{}); ok {
 			for k, v := range m {
 				if s, ok := v.(string); ok {
 					samples[k] = s
@@ -82,13 +82,13 @@ func (s *Server) GetVerifiedCard(ctx context.Context, req *scannerv1.GetVerified
 		}
 	}
 	return &scannerv1.VerifiedCard{
-		DocKey:  safeString(res.Card, "docKey"),
+		DocKey:  safeString(res.Details, "docKey"),
 		Code:    req.Code,
 		Rarity:  req.Rarity,
-		NameEn:  safeString(res.Card, "nameEn"),
-		NameJp:  safeString(res.Card, "nameJp"),
-		NameCn:  safeString(res.Card, "nameCn"),
-		Type:    safeString(res.Card, "type"),
+		NameEn:  safeString(res.Details, "nameEn"),
+		NameJp:  safeString(res.Details, "nameJp"),
+		NameCn:  safeString(res.Details, "nameCn"),
+		Type:    safeString(res.Details, "type"),
 		Samples: samples,
 	}, nil
 }

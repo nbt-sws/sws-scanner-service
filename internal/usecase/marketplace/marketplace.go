@@ -21,19 +21,19 @@ func NewUseCase(pool *pgxpool.Pool) *UseCase {
 
 // TransactionRequest is the input for creating a transaction.
 type TransactionRequest struct {
-	SellerID      string  `json:"sellerId"`
-	BuyerID       string  `json:"buyerId,omitempty"`
-	ItemID        string  `json:"itemId,omitempty"`
-	ItemType      string  `json:"itemType,omitempty"`
-	Price         float64 `json:"price"`
-	Currency      string  `json:"currency,omitempty"`
-	BuyerTier     string  `json:"buyerTier,omitempty"`
-	SellerTier    string  `json:"sellerTier,omitempty"`
-	TxType        string  `json:"txType"`
-	DeliveryMode  string  `json:"deliveryMode,omitempty"`
-	PaymentMethod string  `json:"paymentMethod,omitempty"`
-	SellerCost    float64 `json:"sellerCost,omitempty"`
-	FeeOverride   float64 `json:"feeOverride,omitempty"`
+	SellerID      string                 `json:"sellerId"`
+	BuyerID       string                 `json:"buyerId,omitempty"`
+	ItemID        string                 `json:"itemId,omitempty"`
+	ItemType      string                 `json:"itemType,omitempty"`
+	Price         float64                `json:"price"`
+	Currency      string                 `json:"currency,omitempty"`
+	BuyerTier     string                 `json:"buyerTier,omitempty"`
+	SellerTier    string                 `json:"sellerTier,omitempty"`
+	TxType        string                 `json:"txType"`
+	DeliveryMode  string                 `json:"deliveryMode,omitempty"`
+	PaymentMethod string                 `json:"paymentMethod,omitempty"`
+	SellerCost    float64                `json:"sellerCost,omitempty"`
+	FeeOverride   float64                `json:"feeOverride,omitempty"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 }
 
@@ -120,17 +120,17 @@ func (uc *UseCase) ListTransactions(ctx context.Context, req ListTransactionsReq
 			continue
 		}
 		out = append(out, map[string]interface{}{
-			"id":         id,
-			"sellerId":   sellerID,
-			"buyerId":    buyerID,
-			"itemId":     itemID,
-			"price":      price,
-			"currency":   currency,
-			"txType":     txType,
-			"status":     status,
-			"fees":       fees,
-			"metadata":   metadata,
-			"createdAt":  createdAt,
+			"id":        id,
+			"sellerId":  sellerID,
+			"buyerId":   buyerID,
+			"itemId":    itemID,
+			"price":     price,
+			"currency":  currency,
+			"txType":    txType,
+			"status":    status,
+			"fees":      fees,
+			"metadata":  metadata,
+			"createdAt": createdAt,
 		})
 	}
 	return &ListTransactionsResponse{OK: true, Count: len(out), Transactions: out}, nil
@@ -150,9 +150,45 @@ type FeePreviewRequest struct {
 
 // FeePreviewResponse is the fee preview result.
 type FeePreviewResponse struct {
-	OK     bool                   `json:"ok"`
-	Fees   map[string]interface{} `json:"fees"`
-	Notice string                 `json:"notice,omitempty"`
+	OK       bool              `json:"ok"`
+	Action   string            `json:"action"`
+	Engine   map[string]string `json:"engine"`
+	Input    FeePreviewRequest `json:"input"`
+	Flags    map[string]bool   `json:"flags"`
+	Bracket  string            `json:"bracket"`
+	Buyer    BuyerFees         `json:"buyer"`
+	Seller   SellerFees        `json:"seller"`
+	Platform PlatformFees      `json:"platform"`
+}
+
+type BuyerFees struct {
+	FeeShare     float64 `json:"feeShare"`
+	FeeRate      float64 `json:"feeRate"`
+	ConsignExtra float64 `json:"consignExtra"`
+	Shipping     float64 `json:"shipping"`
+	Subtotal     float64 `json:"subtotal"`
+	PPDiscount   float64 `json:"ppDiscount"`
+	Total        float64 `json:"total"`
+}
+
+type SellerFees struct {
+	FeeShare       float64  `json:"feeShare"`
+	FeeRate        float64  `json:"feeRate"`
+	ConsignPayback float64  `json:"consignPayback"`
+	Receives       float64  `json:"receives"`
+	Profit         float64  `json:"profit"`
+	GM             *float64 `json:"gm"`
+}
+
+type PlatformFees struct {
+	FeeRevenue        float64 `json:"feeRevenue"`
+	ShippingCollected float64 `json:"shippingCollected"`
+	ShippingCost      float64 `json:"shippingCost"`
+	ShippingNet       float64 `json:"shippingNet"`
+	PaymentFee        float64 `json:"paymentFee"`
+	VATOnFee          float64 `json:"vatOnFee"`
+	Net               float64 `json:"net"`
+	GM                float64 `json:"gm"`
 }
 
 // PreviewFees calculates a real single-transaction fee breakdown using the
@@ -172,20 +208,68 @@ func (uc *UseCase) PreviewFees(req FeePreviewRequest) *FeePreviewResponse {
 		cfg.BSARates,
 		false,
 	)
-	return &FeePreviewResponse{OK: true, Fees: resultToMap(result)}
+	resp := feePreviewFromResult(result)
+	resp.Input = req
+	return resp
+}
+
+func feePreviewFromResult(r *CalcResult) *FeePreviewResponse {
+	cfg := DefaultFeeConfig()
+	buyerRate := 0.0
+	if r.BuyerFeeRate != nil {
+		buyerRate = *r.BuyerFeeRate
+	}
+	sellerRate := 0.0
+	if r.SellerFeeRate != nil {
+		sellerRate = *r.SellerFeeRate
+	}
+	return &FeePreviewResponse{
+		OK:      true,
+		Action:  "preview-fees",
+		Engine:  map[string]string{"nbt": cfg.Name, "version": cfg.Version},
+		Flags:   map[string]bool{"isAuction": r.IsAuction, "isConsign": r.IsConsign},
+		Bracket: r.Bracket,
+		Buyer: BuyerFees{
+			FeeShare:     r.BuyerFeeShare,
+			FeeRate:      buyerRate,
+			ConsignExtra: r.ConsignExtra,
+			Shipping:     r.ShippingCharge,
+			Subtotal:     r.BuyerSubtotal,
+			PPDiscount:   r.PPDiscountAmt,
+			Total:        r.BuyerTotal,
+		},
+		Seller: SellerFees{
+			FeeShare:       r.SellerFeeShare,
+			FeeRate:        sellerRate,
+			ConsignPayback: r.ConsignPayback,
+			Receives:       r.SellerReceives,
+			Profit:         r.SellerProfit,
+			GM:             r.SellerGM,
+		},
+		Platform: PlatformFees{
+			FeeRevenue:        r.TotalFeeRevenue,
+			ShippingCollected: r.ShippingCollected,
+			ShippingCost:      r.ShippingCost,
+			ShippingNet:       r.ShippingNet,
+			PaymentFee:        r.PaymentFee,
+			VATOnFee:          r.VATOnFee,
+			Net:               r.PlatformNet,
+			GM:                r.PlatformGM,
+		},
+	}
 }
 
 // PreviewChainRequest is the input for a consignment chain preview.
 type PreviewChainRequest struct {
-	Price            float64    `json:"price"`
-	BuyerTier        string     `json:"buyerTier"`
-	SellerTier       string     `json:"sellerTier"`
-	TxType           string     `json:"txType"`
-	Payment          string     `json:"payment"`
-	Markup           float64    `json:"markup"`
-	FeeOverride      float64    `json:"feeOverride"`
-	SubsequentPayback bool      `json:"subsequentPayback"`
-	ChainHops        []ChainHop `json:"chainHops"`
+	Price             float64    `json:"price"`
+	BuyerTier         string     `json:"buyerTier"`
+	SellerTier        string     `json:"sellerTier"`
+	TxType            string     `json:"txType"`
+	Payment           string     `json:"payment"`
+	Markup            float64    `json:"markup"`
+	FeeOverride       float64    `json:"feeOverride"`
+	SubsequentPayback bool       `json:"subsequentPayback"`
+	ChainHops         []ChainHop `json:"chainHops"`
 }
 
 // PreviewChain calculates a multi-hop consignment chain breakdown.

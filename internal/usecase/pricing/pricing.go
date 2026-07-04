@@ -19,11 +19,18 @@ import (
 
 const fxEndpoint = "https://api.frankfurter.app/latest"
 
+var fxSymbols = []string{"USD", "PHP", "JPY", "MYR", "SGD", "EUR", "GBP"}
+
+var fxFallback = map[string]float64{
+	"USD": 0.0286, "PHP": 1.66, "JPY": 4.32, "MYR": 0.128,
+	"SGD": 0.0383, "EUR": 0.0258, "GBP": 0.0222,
+}
+
 // UseCase provides pricing and FX operations.
 type UseCase struct {
-	httpClient     *http.Client
-	ebayClient     *ebay.Client
-	visionClient   *vision.Client
+	httpClient      *http.Client
+	ebayClient      *ebay.Client
+	visionClient    *vision.Client
 	anthropicClient *anthropic.Client
 }
 
@@ -37,35 +44,52 @@ func NewUseCase(ebayClient *ebay.Client, visionClient *vision.Client, anthropicC
 	}
 }
 
-// FXResponse mirrors the Frankfurter API response.
+// FXResponse matches the Frankfurter API response with our fallback wrapper.
 type FXResponse struct {
-	Amount float64            `json:"amount"`
-	Base   string             `json:"base"`
-	Date   string             `json:"date"`
-	Rates  map[string]float64 `json:"rates"`
+	Base     string             `json:"base"`
+	Date     string             `json:"date"`
+	Rates    map[string]float64 `json:"rates"`
+	Fallback bool               `json:"fallback"`
+	Error    string             `json:"error,omitempty"`
 }
 
-// FX returns the latest FX rates for a base currency.
+// FX returns the latest FX rates for a base currency (defaults to THB).
 func (uc *UseCase) FX(ctx context.Context, base string) (*FXResponse, error) {
 	if base == "" {
-		base = "USD"
+		base = "THB"
 	}
-	url := fmt.Sprintf("%s?base=%s", fxEndpoint, base)
+	url := fmt.Sprintf("%s?base=%s&symbols=%s", fxEndpoint, base, strings.Join(fxSymbols, ","))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("User-Agent", "SwibSwap/13.12 (+https://boboa-v13.vercel.app)")
+
 	resp, err := uc.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return &FXResponse{Base: base, Rates: fxFallback, Fallback: true, Error: err.Error()}, nil
 	}
 	defer resp.Body.Close()
 
-	var fx FXResponse
-	if err := json.NewDecoder(resp.Body).Decode(&fx); err != nil {
-		return nil, err
+	if resp.StatusCode != http.StatusOK {
+		return &FXResponse{Base: base, Rates: fxFallback, Fallback: true, Error: fmt.Sprintf("Frankfurter HTTP %d", resp.StatusCode)}, nil
 	}
-	return &fx, nil
+
+	var upstream struct {
+		Base  string             `json:"base"`
+		Date  string             `json:"date"`
+		Rates map[string]float64 `json:"rates"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&upstream); err != nil {
+		return &FXResponse{Base: base, Rates: fxFallback, Fallback: true, Error: err.Error()}, nil
+	}
+	if upstream.Base == "" {
+		upstream.Base = base
+	}
+	if upstream.Rates == nil {
+		upstream.Rates = fxFallback
+	}
+	return &FXResponse{Base: upstream.Base, Date: upstream.Date, Rates: upstream.Rates, Fallback: false}, nil
 }
 
 // PriceResult is the pricing response.
@@ -107,7 +131,7 @@ type Overall struct {
 
 // SoldSnapshot is the most recent sold listing.
 type SoldSnapshot struct {
-	Date    string  `json:"date"`
+	Date     string  `json:"date"`
 	PriceUSD float64 `json:"priceUSD"`
 }
 
@@ -115,15 +139,15 @@ var rarityEnglish = map[string]string{
 	"C": "Common", "UC": "Uncommon", "R": "Rare", "SR": "Super Rare", "SEC": "Secret Rare",
 	"L": "Leader", "TR": "Treasure Rare", "SP": "Special SP", "P": "Promo",
 	"DON!!": "DON", "DON!! Gold": "Don Gold Parallel", "DON!! R": "Don Foil",
-	"MR": "Manga Alt Art",
-	"L★":   "Leader Alt Art",
-	"SR★":  "Super Rare Alt Art",
-	"SEC★": "Secret Rare Alt Art",
-	"R★":   "Rare Alt Art",
-	"UC★":  "Uncommon Alt Art",
-	"C★":   "Common Alt Art",
+	"MR":                "Manga Alt Art",
+	"L★":                "Leader Alt Art",
+	"SR★":               "Super Rare Alt Art",
+	"SEC★":              "Secret Rare Alt Art",
+	"R★":                "Rare Alt Art",
+	"UC★":               "Uncommon Alt Art",
+	"C★":                "Common Alt Art",
 	"Anniversary Promo": "Anniversary",
-	"N": "Common", "UR": "Ultra Rare", "UL": "Ultimate Rare", "SE": "Secret Rare",
+	"N":                 "Common", "UR": "Ultra Rare", "UL": "Ultimate Rare", "SE": "Secret Rare",
 	"HR": "Holographic Rare", "PSE": "Prismatic Secret Rare", "20TH": "20th Secret Rare",
 	"QCSE": "Quarter Century Secret Rare", "QCUR": "Quarter Century Ultra Rare",
 	"CR": "Collectors Rare", "PGR": "Premium Gold Rare",
@@ -332,18 +356,18 @@ func filterByCardCode(items []ebay.Item, searchedCode string) []ebay.Item {
 }
 
 var competingRarityTokens = map[string][]string{
-	"Rare Alternate Art":         {"TREASURE", "SECRET RARE", "SUPER RARE", "PROMO"},
-	"Super Rare Alternate Art":   {"TREASURE", "SECRET RARE"},
-	"Secret Rare Alternate Art":  {"TREASURE", "SUPER RARE"},
-	"Common Alternate Art":       {"TREASURE", "SECRET RARE", "SUPER RARE", "RARE ", "LEADER"},
-	"Uncommon Alternate Art":     {"TREASURE", "SECRET RARE", "SUPER RARE", "RARE ", "LEADER"},
-	"Leader Alternate Art":       {"TREASURE", "SECRET RARE", "SUPER RARE"},
-	"Common":                     {"TREASURE", "SECRET", "SUPER RARE", "RARE", "LEADER", "PROMO"},
-	"Uncommon":                   {"TREASURE", "SECRET", "SUPER RARE", "RARE ", "LEADER"},
-	"Rare":                       {"TREASURE", "SECRET RARE", "SUPER RARE", "ALTERNATE ART"},
-	"Super Rare":                 {"TREASURE", "SECRET RARE", "ALTERNATE ART"},
-	"Secret Rare":                {"TREASURE", "SUPER RARE", "ALTERNATE ART"},
-	"Leader":                     {"TREASURE", "SECRET RARE", "SUPER RARE", "ALTERNATE ART"},
+	"Rare Alternate Art":        {"TREASURE", "SECRET RARE", "SUPER RARE", "PROMO"},
+	"Super Rare Alternate Art":  {"TREASURE", "SECRET RARE"},
+	"Secret Rare Alternate Art": {"TREASURE", "SUPER RARE"},
+	"Common Alternate Art":      {"TREASURE", "SECRET RARE", "SUPER RARE", "RARE ", "LEADER"},
+	"Uncommon Alternate Art":    {"TREASURE", "SECRET RARE", "SUPER RARE", "RARE ", "LEADER"},
+	"Leader Alternate Art":      {"TREASURE", "SECRET RARE", "SUPER RARE"},
+	"Common":                    {"TREASURE", "SECRET", "SUPER RARE", "RARE", "LEADER", "PROMO"},
+	"Uncommon":                  {"TREASURE", "SECRET", "SUPER RARE", "RARE ", "LEADER"},
+	"Rare":                      {"TREASURE", "SECRET RARE", "SUPER RARE", "ALTERNATE ART"},
+	"Super Rare":                {"TREASURE", "SECRET RARE", "ALTERNATE ART"},
+	"Secret Rare":               {"TREASURE", "SUPER RARE", "ALTERNATE ART"},
+	"Leader":                    {"TREASURE", "SECRET RARE", "SUPER RARE", "ALTERNATE ART"},
 }
 
 func filterByRarityTokens(items []ebay.Item, rarityEN, code string) []ebay.Item {

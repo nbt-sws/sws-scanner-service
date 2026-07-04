@@ -135,6 +135,37 @@ func (f *Firestore) FindVerifiedCardsWithPHash(ctx context.Context, limit int) (
 	return out, nil
 }
 
+// FindVerifiedCardsByCode returns verified cards matching the printed code.
+func (f *Firestore) FindVerifiedCardsByCode(ctx context.Context, code string, limit int) ([]*VerifiedCardDoc, error) {
+	if f == nil || f.client == nil {
+		return nil, fmt.Errorf("firestore not initialized")
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	iter := f.client.Collection("verified_cards").Where("code", "==", code).Limit(limit).Documents(ctx)
+	defer iter.Stop()
+
+	var out []*VerifiedCardDoc
+	for {
+		doc, err := iter.Next()
+		if err != nil {
+			if err.Error() == "iterator done" {
+				break
+			}
+			return nil, err
+		}
+		var v VerifiedCardDoc
+		if err := doc.DataTo(&v); err != nil {
+			continue
+		}
+		v.DocKey = doc.Ref.ID
+		v.Data = doc.Data()
+		out = append(out, &v)
+	}
+	return out, nil
+}
+
 // UpsertVerifiedCard merges data into a verified_cards document.
 func (f *Firestore) UpsertVerifiedCard(ctx context.Context, key string, data map[string]interface{}) error {
 	if f == nil || f.client == nil {
@@ -142,6 +173,42 @@ func (f *Firestore) UpsertVerifiedCard(ctx context.Context, key string, data map
 	}
 	_, err := f.client.Collection("verified_cards").Doc(key).Set(ctx, data, firestore.MergeAll)
 	return err
+}
+
+// FindExistingVerifiedCodes returns the subset of synthetic codes that have at
+// least one verified_cards record. Firestore IN queries are capped at 30 items.
+func (f *Firestore) FindExistingVerifiedCodes(ctx context.Context, codes []string) (map[string]bool, error) {
+	if f == nil || f.client == nil {
+		return nil, fmt.Errorf("firestore not initialized")
+	}
+	if len(codes) == 0 {
+		return map[string]bool{}, nil
+	}
+	result := make(map[string]bool, len(codes))
+	const chunk = 30
+	for i := 0; i < len(codes); i += chunk {
+		end := i + chunk
+		if end > len(codes) {
+			end = len(codes)
+		}
+		slice := codes[i:end]
+		iter := f.client.Collection("verified_cards").Where("code", "in", slice).Select("code").Documents(ctx)
+		for {
+			doc, err := iter.Next()
+			if err != nil {
+				if err.Error() == "iterator done" {
+					break
+				}
+				iter.Stop()
+				return nil, err
+			}
+			if c, ok := doc.Data()["code"].(string); ok && c != "" {
+				result[c] = true
+			}
+		}
+		iter.Stop()
+	}
+	return result, nil
 }
 
 // PatchScanCache merges data into a scans cache document.

@@ -1,35 +1,77 @@
 package utility
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	firebaseinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/firebase"
 )
 
 // UseCase provides small utility operations.
 type UseCase struct {
 	httpClient *http.Client
+	storage    *firebaseinfra.Storage
 }
 
 // NewUseCase creates a utility use case.
-func NewUseCase() *UseCase {
+func NewUseCase(storage *firebaseinfra.Storage) *UseCase {
 	return &UseCase{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
+		storage:    storage,
 	}
 }
 
+var proxyAllowedHosts = []string{
+	"asia-en.onepiece-cardgame.com",
+	"en.onepiece-cardgame.com",
+	"www.onepiece-cardgame.com",
+	"www.onepiece-cardgame.cn",
+	"optcgapi.com",
+	"www.optcgapi.com",
+	"www.apitcg.com",
+	"cardpiece.com",
+	"cdn.shopify.com",
+	"storage.googleapis.com",
+	"firebasestorage.googleapis.com",
+}
+
 // ProxyImage fetches an external image and returns its bytes + content type.
-func (uc *UseCase) ProxyImage(url string) ([]byte, string, error) {
-	if url == "" {
+func (uc *UseCase) ProxyImage(rawURL string) ([]byte, string, error) {
+	if rawURL == "" {
 		return nil, "", fmt.Errorf("url required")
 	}
-	resp, err := uc.httpClient.Get(url)
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid url")
+	}
+	allowed := false
+	for _, h := range proxyAllowedHosts {
+		if parsed.Hostname() == h {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return nil, "", fmt.Errorf("host not allowed")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, parsed.String(), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; SwibSwap/13.6)")
+	req.Header.Set("Accept", "image/png,image/jpeg,image/webp,image/*;q=0.9,*/*;q=0.8")
+
+	resp, err := uc.httpClient.Do(req)
 	if err != nil {
 		return nil, "", err
 	}
@@ -37,13 +79,16 @@ func (uc *UseCase) ProxyImage(url string) ([]byte, string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("upstream status %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, "", err
-	}
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "image/jpeg"
+	}
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, "", fmt.Errorf("upstream returned non-image")
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
 	}
 	return data, contentType, nil
 }
@@ -75,8 +120,8 @@ type LookupMatch struct {
 	Ratio    float64 `json:"ratio"`
 }
 
-// LookupByFilename searches local static catalogs by filename pattern.
-func (uc *UseCase) LookupByFilename(req LookupRequest) *LookupResponse {
+// LookupByFilename searches local static catalogs + Firebase Storage by filename pattern.
+func (uc *UseCase) LookupByFilename(ctx context.Context, req LookupRequest) *LookupResponse {
 	pattern := buildPattern(req)
 	patternStr := strings.Join(pattern, "_")
 
@@ -84,6 +129,7 @@ func (uc *UseCase) LookupByFilename(req LookupRequest) *LookupResponse {
 	all = append(all, scanDir("static/don-pdf-wm", "/don-pdf-wm", pattern)...)
 	all = append(all, scanDir("static/cn-anniv", "/cn-anniv", pattern)...)
 	all = append(all, scanDir("static/don-pdf", "/don-pdf", pattern)...)
+	all = append(all, uc.scanFirebase(ctx, pattern)...)
 
 	sort.Slice(all, func(i, j int) bool {
 		if all[i].Ratio != all[j].Ratio {
@@ -104,6 +150,36 @@ func (uc *UseCase) LookupByFilename(req LookupRequest) *LookupResponse {
 		TotalScanned: len(all),
 		Matches:      top,
 	}
+}
+
+func (uc *UseCase) scanFirebase(ctx context.Context, pattern []string) []LookupMatch {
+	if uc.storage == nil {
+		return nil
+	}
+	files, err := uc.storage.ListObjects(ctx, "verified_cards/samples/")
+	if err != nil {
+		return nil
+	}
+	out := make([]LookupMatch, 0, len(files))
+	for _, name := range files {
+		base := filepath.Base(name)
+		if !extRegex.MatchString(base) {
+			continue
+		}
+		m := matchesPattern(base, pattern)
+		if m == nil {
+			continue
+		}
+		publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", uc.storage.Bucket(), name)
+		out = append(out, LookupMatch{
+			Filename: base,
+			URL:      publicURL,
+			Source:   "firebase-verified-samples",
+			Score:    m.score,
+			Ratio:    m.ratio,
+		})
+	}
+	return out
 }
 
 func buildPattern(req LookupRequest) []string {
@@ -143,19 +219,20 @@ func shortType(t string) string {
 	return slugifyPart(t)
 }
 
+var extRegex = regexp.MustCompile(`(?i)\.(jpe?g|png|webp)$`)
+
 func scanDir(absDir, urlPrefix string, pattern []string) []LookupMatch {
 	entries, err := os.ReadDir(absDir)
 	if err != nil {
 		return nil
 	}
 	var out []LookupMatch
-	extRegex := regexp.MustCompile(`(?i)\.(jpe?g|png|webp)$`)
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
 		}
 		name := e.Name()
-		if !extRegex.MatchString(name) {
+		if name == "" || !extRegex.MatchString(name) {
 			continue
 		}
 		m := matchesPattern(name, pattern)
