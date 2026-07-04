@@ -104,7 +104,7 @@ type LookupRequest struct {
 
 // LookupResponse is the lookup result.
 type LookupResponse struct {
-	OK           string        `json:"ok"`
+	OK           bool          `json:"ok"`
 	Pattern      string        `json:"pattern"`
 	Count        int           `json:"count"`
 	TotalScanned int           `json:"totalScanned"`
@@ -144,7 +144,7 @@ func (uc *UseCase) LookupByFilename(ctx context.Context, req LookupRequest) *Loo
 	}
 
 	return &LookupResponse{
-		OK:           "true",
+		OK:           true,
 		Pattern:      patternStr,
 		Count:        len(top),
 		TotalScanned: len(all),
