@@ -1,0 +1,10 @@
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+README.md
+server.exe
+*.log
+out/
+dist/

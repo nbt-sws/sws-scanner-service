@@ -1,0 +1,144 @@
+package http
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jatibroski/sws-scanner-service/internal/config"
+	firebaseinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/firebase"
+	natsinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/nats"
+	auctionuc "github.com/jatibroski/sws-scanner-service/internal/usecase/auctions"
+	marketplaceuc "github.com/jatibroski/sws-scanner-service/internal/usecase/marketplace"
+	pricinguc "github.com/jatibroski/sws-scanner-service/internal/usecase/pricing"
+	scanuc "github.com/jatibroski/sws-scanner-service/internal/usecase/scan"
+	utilityuc "github.com/jatibroski/sws-scanner-service/internal/usecase/utility"
+	variantsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/variants"
+	visualmatchuc "github.com/jatibroski/sws-scanner-service/internal/usecase/visualmatch"
+	contributionsuc "github.com/jatibroski/sws-scanner-service/internal/usecase/contributions"
+)
+
+// Handler holds HTTP handlers for the scanner service.
+type Handler struct {
+	cfg          *config.Config
+	pool         *pgxpool.Pool
+	firebase     *firebaseinfra.App
+	publisher    *natsinfra.Publisher
+	scanUC       *scanuc.UseCase
+	variantsUC   *variantsuc.UseCase
+	pricingUC    *pricinguc.UseCase
+	utilityUC    *utilityuc.UseCase
+	marketplaceUC *marketplaceuc.UseCase
+	auctionsUC   *auctionuc.UseCase
+	visualMatchUC *visualmatchuc.UseCase
+	contributionsUC *contributionsuc.UseCase
+}
+
+// NewHandler creates a new HTTP handler.
+func NewHandler(
+	cfg *config.Config,
+	pool *pgxpool.Pool,
+	firebase *firebaseinfra.App,
+	publisher *natsinfra.Publisher,
+	scanUC *scanuc.UseCase,
+	variantsUC *variantsuc.UseCase,
+	pricingUC *pricinguc.UseCase,
+	utilityUC *utilityuc.UseCase,
+	marketplaceUC *marketplaceuc.UseCase,
+	auctionsUC *auctionuc.UseCase,
+	visualMatchUC *visualmatchuc.UseCase,
+	contributionsUC *contributionsuc.UseCase,
+) *Handler {
+	return &Handler{
+		cfg:             cfg,
+		pool:            pool,
+		firebase:        firebase,
+		publisher:       publisher,
+		scanUC:          scanUC,
+		variantsUC:      variantsUC,
+		pricingUC:       pricingUC,
+		utilityUC:       utilityUC,
+		marketplaceUC:   marketplaceUC,
+		auctionsUC:       auctionsUC,
+		visualMatchUC:   visualMatchUC,
+		contributionsUC: contributionsUC,
+	}
+}
+
+// RegisterRoutes registers all service routes.
+func (h *Handler) RegisterRoutes(r *gin.Engine) {
+	v1 := r.Group("/v1")
+	{
+		v1.GET("/whoami", h.WhoAmI)
+		v1.GET("/fx", h.FX)
+		v1.POST("/scan", h.Scan)
+		v1.POST("/quality", h.Quality)
+		v1.POST("/watermark", h.Watermark)
+		v1.POST("/visual-match", h.VisualMatch)
+		v1.POST("/scan-phash", h.ScanPhash)
+		v1.GET("/prices", h.Prices)
+		v1.GET("/op-variants", h.OPVariants)
+		v1.GET("/op-details", h.OPDetails)
+		v1.GET("/don-cards", h.DonCards)
+		v1.GET("/cn-anniv-cards", h.CNAnnivCards)
+		v1.POST("/contribute", h.Contribute)
+		v1.POST("/contribute-sample", h.ContributeSample)
+		v1.POST("/transactions", h.CreateTransaction)
+		v1.GET("/transactions", h.ListTransactions)
+		v1.POST("/auctions", h.CreateAuction)
+		v1.GET("/auctions", h.ListAuctions)
+		v1.POST("/auctions/:id/bid", h.PlaceBid)
+		v1.POST("/auctions/tick", h.AuctionTick)
+		v1.GET("/lookup-by-filename", h.LookupByFilename)
+		v1.GET("/proxy-image", h.ProxyImage)
+	}
+
+	// Static reference assets served at root to match existing app paths.
+	r.Static("/don-pdf", "./static/don-pdf")
+	r.Static("/don-pdf-wm", "./static/don-pdf-wm")
+	r.Static("/cn-anniv", "./static/cn-anniv")
+	r.Static("/logos", "./static/logos")
+}
+
+func (h *Handler) notImplemented(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{"error": "NOT_IMPLEMENTED"})
+}
+
+// WhoAmI echoes back the authenticated user ID.
+func (h *Handler) WhoAmI(c *gin.Context) {
+	userID := h.currentUser(c)
+	if userID == "" {
+		userID = "anonymous"
+	}
+	c.JSON(http.StatusOK, gin.H{"user_id": userID})
+}
+
+// currentUser extracts the user ID from X-User-ID header or Firebase token.
+func (h *Handler) currentUser(c *gin.Context) string {
+	if id := c.GetHeader("X-User-ID"); id != "" {
+		return id
+	}
+	if h.cfg.Env == "production" {
+		return ""
+	}
+	// Dev fallback: verify Firebase token if provided.
+	if h.firebase != nil {
+		uid, err := h.firebase.VerifyIDToken(c.Request.Context(), c.GetHeader("Authorization"))
+		if err == nil {
+			return uid
+		}
+	}
+	return ""
+}
+
+func (h *Handler) currentUserEmail(c *gin.Context) string {
+	uid := h.currentUser(c)
+	if uid == "" || h.firebase == nil {
+		return ""
+	}
+	email, err := h.firebase.GetUserEmail(c.Request.Context(), uid)
+	if err != nil {
+		return ""
+	}
+	return email
+}

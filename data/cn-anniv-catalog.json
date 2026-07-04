@@ -1,0 +1,536 @@
+{
+  "source": "CN_Anniversary List.pdf (Bandai CN promo SAMPLE images)",
+  "generated": "2026-05-20",
+  "count": 33,
+  "items": [
+    {
+      "id": "cn1anv_01",
+      "anniv": "1ANV",
+      "idx": 1,
+      "page": 1,
+      "imageUrl": "/cn-anniv/anniv1_01.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        760,
+        288,
+        1720,
+        1632
+      ],
+      "synthCode": "CN-1ANV-001"
+    },
+    {
+      "id": "cn1anv_02",
+      "anniv": "1ANV",
+      "idx": 2,
+      "page": 1,
+      "imageUrl": "/cn-anniv/anniv1_02.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        808,
+        1768,
+        1968,
+        3272
+      ],
+      "synthCode": "CN-1ANV-002"
+    },
+    {
+      "id": "cn1anv_03",
+      "anniv": "1ANV",
+      "idx": 3,
+      "page": 2,
+      "imageUrl": "/cn-anniv/anniv1_03.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        432,
+        448,
+        944,
+        1168
+      ],
+      "synthCode": "CN-1ANV-003"
+    },
+    {
+      "id": "cn1anv_04",
+      "anniv": "1ANV",
+      "idx": 4,
+      "page": 2,
+      "imageUrl": "/cn-anniv/anniv1_04.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        976,
+        448,
+        1488,
+        1160
+      ],
+      "synthCode": "CN-1ANV-004"
+    },
+    {
+      "id": "cn1anv_05",
+      "anniv": "1ANV",
+      "idx": 5,
+      "page": 2,
+      "imageUrl": "/cn-anniv/anniv1_05.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        1536,
+        448,
+        2048,
+        1168
+      ],
+      "synthCode": "CN-1ANV-005"
+    },
+    {
+      "id": "cn1anv_06",
+      "anniv": "1ANV",
+      "idx": 6,
+      "page": 2,
+      "imageUrl": "/cn-anniv/anniv1_06.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        688,
+        1232,
+        1200,
+        1952
+      ],
+      "synthCode": "CN-1ANV-006"
+    },
+    {
+      "id": "cn1anv_07",
+      "anniv": "1ANV",
+      "idx": 7,
+      "page": 2,
+      "imageUrl": "/cn-anniv/anniv1_07.jpeg",
+      "setCode": "CN-1ANV",
+      "lang": "CN",
+      "bbox": [
+        1240,
+        1232,
+        1752,
+        1952
+      ],
+      "synthCode": "CN-1ANV-007"
+    },
+    {
+      "id": "cn2anv_01",
+      "anniv": "2ANV",
+      "idx": 1,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_01.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        320,
+        800,
+        1104,
+        1880
+      ],
+      "synthCode": "CN-2ANV-001"
+    },
+    {
+      "id": "cn2anv_02",
+      "anniv": "2ANV",
+      "idx": 2,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_02.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1376,
+        800,
+        2152,
+        1880
+      ],
+      "synthCode": "CN-2ANV-002"
+    },
+    {
+      "id": "cn2anv_03",
+      "anniv": "2ANV",
+      "idx": 3,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_03.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        296,
+        2312,
+        632,
+        2784
+      ],
+      "synthCode": "CN-2ANV-003"
+    },
+    {
+      "id": "cn2anv_04",
+      "anniv": "2ANV",
+      "idx": 4,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_04.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        688,
+        2312,
+        1024,
+        2784
+      ],
+      "synthCode": "CN-2ANV-004"
+    },
+    {
+      "id": "cn2anv_05",
+      "anniv": "2ANV",
+      "idx": 5,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_05.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1072,
+        2312,
+        1408,
+        2776
+      ],
+      "synthCode": "CN-2ANV-005"
+    },
+    {
+      "id": "cn2anv_06",
+      "anniv": "2ANV",
+      "idx": 6,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_06.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1464,
+        2312,
+        1792,
+        2776
+      ],
+      "synthCode": "CN-2ANV-006"
+    },
+    {
+      "id": "cn2anv_07",
+      "anniv": "2ANV",
+      "idx": 7,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_07.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1848,
+        2312,
+        2176,
+        2784
+      ],
+      "synthCode": "CN-2ANV-007"
+    },
+    {
+      "id": "cn2anv_08",
+      "anniv": "2ANV",
+      "idx": 8,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_08.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        296,
+        2832,
+        632,
+        3296
+      ],
+      "synthCode": "CN-2ANV-008"
+    },
+    {
+      "id": "cn2anv_09",
+      "anniv": "2ANV",
+      "idx": 9,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_09.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        680,
+        2832,
+        1024,
+        3296
+      ],
+      "synthCode": "CN-2ANV-009"
+    },
+    {
+      "id": "cn2anv_10",
+      "anniv": "2ANV",
+      "idx": 10,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_10.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1072,
+        2824,
+        1408,
+        3296
+      ],
+      "synthCode": "CN-2ANV-010"
+    },
+    {
+      "id": "cn2anv_11",
+      "anniv": "2ANV",
+      "idx": 11,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_11.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1456,
+        2832,
+        1792,
+        3296
+      ],
+      "synthCode": "CN-2ANV-011"
+    },
+    {
+      "id": "cn2anv_12",
+      "anniv": "2ANV",
+      "idx": 12,
+      "page": 3,
+      "imageUrl": "/cn-anniv/anniv2_12.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        1848,
+        2832,
+        2176,
+        3296
+      ],
+      "synthCode": "CN-2ANV-012"
+    },
+    {
+      "id": "cn2anv_13",
+      "anniv": "2ANV",
+      "idx": 13,
+      "page": 4,
+      "imageUrl": "/cn-anniv/anniv2_13.jpeg",
+      "setCode": "CN-2ANV",
+      "lang": "CN",
+      "bbox": [
+        680,
+        584,
+        1816,
+        2168
+      ],
+      "synthCode": "CN-2ANV-013"
+    },
+    {
+      "id": "cn3anv_01",
+      "anniv": "3ANV",
+      "idx": 1,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_01.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        320,
+        816,
+        1096,
+        1896
+      ],
+      "synthCode": "CN-3ANV-001"
+    },
+    {
+      "id": "cn3anv_02",
+      "anniv": "3ANV",
+      "idx": 2,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_02.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1384,
+        816,
+        2160,
+        1904
+      ],
+      "synthCode": "CN-3ANV-002"
+    },
+    {
+      "id": "cn3anv_03",
+      "anniv": "3ANV",
+      "idx": 3,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_03.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        304,
+        2368,
+        632,
+        2832
+      ],
+      "synthCode": "CN-3ANV-003"
+    },
+    {
+      "id": "cn3anv_04",
+      "anniv": "3ANV",
+      "idx": 4,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_04.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        688,
+        2368,
+        1024,
+        2832
+      ],
+      "synthCode": "CN-3ANV-004"
+    },
+    {
+      "id": "cn3anv_05",
+      "anniv": "3ANV",
+      "idx": 5,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_05.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1072,
+        2368,
+        1408,
+        2832
+      ],
+      "synthCode": "CN-3ANV-005"
+    },
+    {
+      "id": "cn3anv_06",
+      "anniv": "3ANV",
+      "idx": 6,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_06.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1464,
+        2376,
+        1792,
+        2832
+      ],
+      "synthCode": "CN-3ANV-006"
+    },
+    {
+      "id": "cn3anv_07",
+      "anniv": "3ANV",
+      "idx": 7,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_07.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1848,
+        2368,
+        2176,
+        2832
+      ],
+      "synthCode": "CN-3ANV-007"
+    },
+    {
+      "id": "cn3anv_08",
+      "anniv": "3ANV",
+      "idx": 8,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_08.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        304,
+        2888,
+        632,
+        3352
+      ],
+      "synthCode": "CN-3ANV-008"
+    },
+    {
+      "id": "cn3anv_09",
+      "anniv": "3ANV",
+      "idx": 9,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_09.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        688,
+        2888,
+        1024,
+        3352
+      ],
+      "synthCode": "CN-3ANV-009"
+    },
+    {
+      "id": "cn3anv_10",
+      "anniv": "3ANV",
+      "idx": 10,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_10.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1072,
+        2888,
+        1408,
+        3352
+      ],
+      "synthCode": "CN-3ANV-010"
+    },
+    {
+      "id": "cn3anv_11",
+      "anniv": "3ANV",
+      "idx": 11,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_11.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1464,
+        2888,
+        1792,
+        3352
+      ],
+      "synthCode": "CN-3ANV-011"
+    },
+    {
+      "id": "cn3anv_12",
+      "anniv": "3ANV",
+      "idx": 12,
+      "page": 5,
+      "imageUrl": "/cn-anniv/anniv3_12.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        1848,
+        2888,
+        2176,
+        3352
+      ],
+      "synthCode": "CN-3ANV-012"
+    },
+    {
+      "id": "cn3anv_13",
+      "anniv": "3ANV",
+      "idx": 13,
+      "page": 6,
+      "imageUrl": "/cn-anniv/anniv3_13.jpeg",
+      "setCode": "CN-3ANV",
+      "lang": "CN",
+      "bbox": [
+        720,
+        592,
+        1768,
+        2056
+      ],
+      "synthCode": "CN-3ANV-013"
+    }
+  ],
+  "note": "Each item has a synthetic code (CN-1ANV-001..) because the card-code printed on the original CN promo is \"0000\". When the scanner or visual-lookup picker resolves a CN anniversary card, it matches by image / Vision and uses synthCode as the identifier for pricing and Firestore lookup."
+}

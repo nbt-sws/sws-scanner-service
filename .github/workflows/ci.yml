@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+      - run: go mod download
+      - run: go test -v ./...
+      - run: go vet ./...
+
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-1
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+      - env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/sws-scanner-service:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/sws-scanner-service:$IMAGE_TAG
+          docker tag $ECR_REGISTRY/sws-scanner-service:$IMAGE_TAG $ECR_REGISTRY/sws-scanner-service:latest
+          docker push $ECR_REGISTRY/sws-scanner-service:latest
