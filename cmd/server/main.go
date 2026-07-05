@@ -12,7 +12,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jatibroski/sws-scanner-service/internal/config"
-	grpcdelivery "github.com/jatibroski/sws-scanner-service/internal/delivery/grpc"
 	httpdelivery "github.com/jatibroski/sws-scanner-service/internal/delivery/http"
 	"github.com/jatibroski/sws-scanner-service/internal/health"
 	"github.com/jatibroski/sws-scanner-service/internal/infrastructure/anthropic"
@@ -135,14 +134,6 @@ func main() {
 			panic(err)
 		}
 	}()
-
-	grpcServer, err := grpcdelivery.NewServer(scanUC, variantsUC).StartListener(":" + cfg.GRPCPort)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to start grpc server: %v\n", err)
-	} else {
-		fmt.Printf("scanner grpc service listening on :%s\n", cfg.GRPCPort)
-		defer grpcServer.GracefulStop()
-	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
