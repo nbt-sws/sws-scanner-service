@@ -74,10 +74,10 @@ func PreprocessForScan(imageData string) (*PreprocessedImages, error) {
 		BottomLeft  string `json:"bottomLeft"`
 		BottomRight string `json:"bottomRight"`
 	}{
-		TopLeft:     encodeCorner(enhanced, image.Rect(0, 0, cornerSize.Dx(), cornerSize.Dy())),
-		TopRight:    encodeCorner(enhanced, image.Rect(w-cornerSize.Dx(), 0, w, cornerSize.Dy())),
-		BottomLeft:  encodeCorner(enhanced, image.Rect(0, h-cornerSize.Dy(), cornerSize.Dx(), h)),
-		BottomRight: encodeCorner(enhanced, image.Rect(w-cornerSize.Dx(), h-cornerSize.Dy(), w, h)),
+		TopLeft:     encodeCorner(full, image.Rect(0, 0, cornerSize.Dx(), cornerSize.Dy())),
+		TopRight:    encodeCorner(full, image.Rect(w-cornerSize.Dx(), 0, w, cornerSize.Dy())),
+		BottomLeft:  encodeCorner(full, image.Rect(0, h-cornerSize.Dy(), cornerSize.Dx(), h)),
+		BottomRight: encodeCorner(full, image.Rect(w-cornerSize.Dx(), h-cornerSize.Dy(), w, h)),
 	}
 
 	result := &PreprocessedImages{

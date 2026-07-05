@@ -98,8 +98,8 @@ func extractCharacterName(text string) string {
 }
 
 func detectLanguage(text string) string {
-	hasKana := regexp.MustCompile(`[\u3040-\u309F\u30A0-\u30FF]`).MatchString(text)
-	hasCJK := regexp.MustCompile(`[\u4E00-\u9FFF]`).MatchString(text)
+	hasKana := regexp.MustCompile(`[\x{3040}-\x{309F}\x{30A0}-\x{30FF}]`).MatchString(text)
+	hasCJK := regexp.MustCompile(`[\x{4E00}-\x{9FFF}]`).MatchString(text)
 	hasLatin := regexp.MustCompile(`[A-Za-z]`).MatchString(text)
 
 	if hasKana {

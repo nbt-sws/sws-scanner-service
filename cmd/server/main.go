@@ -102,12 +102,12 @@ func main() {
 	if allowAll {
 		corsCfg.AllowAllOrigins = true
 		corsCfg.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-		corsCfg.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID", "X-Cron-Secret"}
+		corsCfg.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID", "X-Mock-Auth-Key", "X-Cron-Secret"}
 		corsCfg.AllowCredentials = false // wildcard + credentials is forbidden by browsers
 	} else if len(cfg.CORSAllowedOrigins) > 0 {
 		corsCfg.AllowOrigins = cfg.CORSAllowedOrigins
 		corsCfg.AllowMethods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
-		corsCfg.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID", "X-Cron-Secret"}
+		corsCfg.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization", "X-User-ID", "X-Mock-Auth-Key", "X-Cron-Secret"}
 		corsCfg.AllowCredentials = true
 	}
 	r.Use(cors.New(corsCfg))

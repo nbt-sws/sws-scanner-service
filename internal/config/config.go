@@ -34,6 +34,13 @@ type Config struct {
 	AdminEmails        []string
 	AuctionRequireKYC  bool
 	CronSecret         string
+
+	// Mock auth (temporary bypass for pre-vault/user prod testing)
+	MockAuthEnabled bool
+	MockUserID      string
+	MockUserEmail   string
+	MockUserAdmin   bool
+	MockAuthKey     string
 }
 
 // Load reads configuration from environment variables.
@@ -64,6 +71,12 @@ func Load() *Config {
 		AdminEmails:        splitEnv(getEnv("ADMIN_EMAILS", "")),
 		AuctionRequireKYC:  getEnvBool("AUCTION_REQUIRE_KYC", false),
 		CronSecret:         getEnv("CRON_SECRET", ""),
+
+		MockAuthEnabled: getEnvBool("MOCK_AUTH_ENABLED", false),
+		MockUserID:      getEnv("MOCK_USER_ID", ""),
+		MockUserEmail:   getEnv("MOCK_USER_EMAIL", ""),
+		MockUserAdmin:   getEnvBool("MOCK_USER_ADMIN", false),
+		MockAuthKey:     getEnv("MOCK_AUTH_KEY", ""),
 	}
 
 	if cfg.DBURL == "" {

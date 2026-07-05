@@ -122,6 +122,18 @@ func (uc *UseCase) Scan(ctx context.Context, req ScanRequest, userID string) (*S
 	}()
 	wg.Wait()
 
+	if haikuErr != nil {
+		fmt.Printf("[scan] haiku error: %v\n", haikuErr)
+	}
+	if uc.anthropic == nil {
+		fmt.Println("[scan] anthropic client not initialized (missing ANTHROPIC_API_KEY)")
+	}
+	if visionResult == nil {
+		fmt.Println("[scan] vision result is nil (missing GOOGLE_VISION_API_KEY or Vision disabled)")
+	} else if !visionResult.OK {
+		fmt.Printf("[scan] vision error: %s\n", visionResult.Error)
+	}
+
 	card, haikuFailed := &Card{}, false
 	if haikuErr != nil {
 		haikuFailed = true
@@ -278,7 +290,7 @@ func imageBlock(dataURL string) anthropic.ContentBlock {
 		Data      string `json:"data"`
 	}{
 		Type:      "base64",
-		MediaType: "image/jpeg",
+		MediaType: mediaType(dataURL),
 		Data:      stripDataURL(dataURL),
 	}
 	return b
@@ -289,6 +301,19 @@ func stripDataURL(dataURL string) string {
 		return dataURL[idx+1:]
 	}
 	return dataURL
+}
+
+func mediaType(dataURL string) string {
+	if strings.HasPrefix(dataURL, "data:image/png") {
+		return "image/png"
+	}
+	if strings.HasPrefix(dataURL, "data:image/webp") {
+		return "image/webp"
+	}
+	if strings.HasPrefix(dataURL, "data:image/gif") {
+		return "image/gif"
+	}
+	return "image/jpeg"
 }
 
 func selectVerifiedImageURL(v *firebaseinfra.VerifiedCardDoc, lang string) string {

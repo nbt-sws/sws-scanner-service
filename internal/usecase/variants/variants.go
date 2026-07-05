@@ -15,7 +15,10 @@ import (
 	"time"
 
 	firebaseinfra "github.com/jatibroski/sws-scanner-service/internal/infrastructure/firebase"
+	"golang.org/x/sync/errgroup"
 )
+
+const cacheTTL = 5 * time.Minute
 
 // UseCase serves card reference data and variant lookups.
 type UseCase struct {
@@ -25,14 +28,18 @@ type UseCase struct {
 	storage        *firebaseinfra.Storage
 	httpClient     *http.Client
 	loadOnce       sync.Once
+	variantsCache  *ttlCache[*OPVariantsResponse]
+	detailsCache   *ttlCache[*OPDetailsResponse]
 }
 
 // NewUseCase creates a variants use case.
 func NewUseCase(firestore *firebaseinfra.Firestore, storage *firebaseinfra.Storage) *UseCase {
 	return &UseCase{
-		firestore:  firestore,
-		storage:    storage,
-		httpClient: &http.Client{Timeout: 15 * time.Second},
+		firestore:     firestore,
+		storage:       storage,
+		httpClient:    &http.Client{Timeout: 15 * time.Second},
+		variantsCache: newTTLCache[*OPVariantsResponse](cacheTTL),
+		detailsCache:  newTTLCache[*OPDetailsResponse](cacheTTL),
 	}
 }
 
@@ -131,6 +138,10 @@ func isLightweight(v string) bool {
 	return v == "1" || strings.EqualFold(v, "true")
 }
 
+func variantsCacheKey(req OPVariantsRequest) string {
+	return fmt.Sprintf("%s:%s:%s:%v", strings.ToUpper(req.Code), strings.ToUpper(req.Lang), req.Rarity, isLightweight(req.Lightweight))
+}
+
 // OPVariants searches verified cards and external sources for every printed variant of a code.
 func (uc *UseCase) OPVariants(ctx context.Context, req OPVariantsRequest) *OPVariantsResponse {
 	if req.Code == "" {
@@ -140,12 +151,24 @@ func (uc *UseCase) OPVariants(ctx context.Context, req OPVariantsRequest) *OPVar
 		req.Limit = 50
 	}
 
-	lang := strings.ToUpper(req.Lang)
-	verified := uc.fromVerified(ctx, req.Code, lang)
-	optcg := uc.fromOptcgapi(ctx, req.Code)
-	apit := uc.fromApitcg(ctx, req.Code)
+	if cached, ok := uc.variantsCache.Get(variantsCacheKey(req)); ok {
+		return cached
+	}
 
-	if isLightweight(req.Lightweight) {
+	lang := strings.ToUpper(req.Lang)
+	lightweight := isLightweight(req.Lightweight)
+
+	var verified, optcg, apit, bandai []Variant
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error { verified = uc.fromVerified(ctx, req.Code, lang); return nil })
+	g.Go(func() error { optcg = uc.fromOptcgapi(ctx, req.Code); return nil })
+	g.Go(func() error { apit = uc.fromApitcg(ctx, req.Code); return nil })
+	if !lightweight {
+		g.Go(func() error { bandai = uc.fromBandai(ctx, req.Code, lang); return nil })
+	}
+	_ = g.Wait()
+
+	if lightweight {
 		set := map[string]bool{}
 		for _, v := range append(append(verified, optcg...), apit...) {
 			if v.Rarity != "" && v.Rarity != "Unknown" && v.Rarity != "Base" {
@@ -157,7 +180,7 @@ func (uc *UseCase) OPVariants(ctx context.Context, req OPVariantsRequest) *OPVar
 			rarities = append(rarities, r)
 		}
 		sort.Strings(rarities)
-		return &OPVariantsResponse{
+		resp := &OPVariantsResponse{
 			OK:       true,
 			Code:     req.Code,
 			Rarities: rarities,
@@ -167,9 +190,10 @@ func (uc *UseCase) OPVariants(ctx context.Context, req OPVariantsRequest) *OPVar
 				Apitcg:   len(apit),
 			},
 		}
+		uc.variantsCache.Set(variantsCacheKey(req), resp)
+		return resp
 	}
 
-	bandai := uc.fromBandai(ctx, req.Code, lang)
 	cardpiece := []Variant{} // TODO: port cardpiece search for CN priority
 
 	var variants []Variant
@@ -184,7 +208,7 @@ func (uc *UseCase) OPVariants(ctx context.Context, req OPVariantsRequest) *OPVar
 		source = "db-first-merged"
 	}
 
-	return &OPVariantsResponse{
+	resp := &OPVariantsResponse{
 		OK:       true,
 		Code:     req.Code,
 		Lang:     req.Lang,
@@ -200,6 +224,8 @@ func (uc *UseCase) OPVariants(ctx context.Context, req OPVariantsRequest) *OPVar
 		Source:         source,
 		CardpieceTried: nil,
 	}
+	uc.variantsCache.Set(variantsCacheKey(req), resp)
+	return resp
 }
 
 func (uc *UseCase) fromVerified(ctx context.Context, code, lang string) []Variant {
@@ -632,29 +658,51 @@ type OPDetailsResponse struct {
 	Error       string                 `json:"error,omitempty"`
 }
 
+func detailsCacheKey(req OPDetailsRequest) string {
+	return fmt.Sprintf("%s:%s:%s", strings.ToUpper(req.Code), strings.ToUpper(req.Lang), req.Rarity)
+}
+
 // OPDetails returns canonical card metadata + a sample image URL.
 func (uc *UseCase) OPDetails(ctx context.Context, req OPDetailsRequest) *OPDetailsResponse {
 	if req.Code == "" {
 		return &OPDetailsResponse{OK: false, Error: "Missing code"}
 	}
 
-	errors := []string{}
-	var metadata map[string]interface{}
+	if cached, ok := uc.detailsCache.Get(detailsCacheKey(req)); ok {
+		return cached
+	}
 
-	if m, err := uc.detailsFromOptcgapi(ctx, req.Code); err == nil && m != nil {
-		metadata = m
-	} else if err != nil {
-		errors = append(errors, fmt.Sprintf("optcgapi: %v", err))
+	var optcgMeta, apitMeta map[string]interface{}
+	var optcgErr, apitErr error
+	var bandai map[string]interface{}
+
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		optcgMeta, optcgErr = uc.detailsFromOptcgapi(ctx, req.Code)
+		return nil
+	})
+	g.Go(func() error {
+		apitMeta, apitErr = uc.detailsFromApitcg(ctx, req.Code)
+		return nil
+	})
+	g.Go(func() error {
+		bandai = uc.bandaiDirectImage(ctx, req.Code, req.Lang)
+		return nil
+	})
+	_ = g.Wait()
+
+	errors := []string{}
+	metadata := optcgMeta
+	if optcgErr != nil {
+		errors = append(errors, fmt.Sprintf("optcgapi: %v", optcgErr))
 	}
 	if metadata == nil {
-		if m, err := uc.detailsFromApitcg(ctx, req.Code); err == nil && m != nil {
-			metadata = m
-		} else if err != nil {
-			errors = append(errors, fmt.Sprintf("apitcg: %v", err))
+		metadata = apitMeta
+		if apitErr != nil {
+			errors = append(errors, fmt.Sprintf("apitcg: %v", apitErr))
 		}
 	}
 
-	bandai := uc.bandaiDirectImage(ctx, req.Code, req.Lang)
 	if bandai != nil && bandai["imageUrl"] != nil && bandai["imageUrl"] != "" {
 		if metadata == nil {
 			metadata = map[string]interface{}{}
@@ -664,11 +712,13 @@ func (uc *UseCase) OPDetails(ctx context.Context, req OPDetailsRequest) *OPDetai
 	}
 
 	if metadata == nil {
-		return &OPDetailsResponse{
+		resp := &OPDetailsResponse{
 			OK:          true,
 			Details:     nil,
 			Diagnostics: map[string]interface{}{"sourceErrors": errors, "mirroredToFirebase": false},
 		}
+		uc.detailsCache.Set(detailsCacheKey(req), resp)
+		return resp
 	}
 
 	imageURL, _ := metadata["imageUrl"].(string)
@@ -684,7 +734,7 @@ func (uc *UseCase) OPDetails(ctx context.Context, req OPDetailsRequest) *OPDetai
 		details["sampleImageUrl"] = imageURL
 	}
 
-	return &OPDetailsResponse{
+	resp := &OPDetailsResponse{
 		OK:      true,
 		Details: details,
 		Diagnostics: map[string]interface{}{
@@ -692,6 +742,8 @@ func (uc *UseCase) OPDetails(ctx context.Context, req OPDetailsRequest) *OPDetai
 			"mirroredToFirebase": mirrored != "",
 		},
 	}
+	uc.detailsCache.Set(detailsCacheKey(req), resp)
+	return resp
 }
 
 func (uc *UseCase) detailsFromOptcgapi(ctx context.Context, code string) (map[string]interface{}, error) {

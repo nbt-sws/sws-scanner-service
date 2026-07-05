@@ -118,17 +118,24 @@ func (h *Handler) WhoAmI(c *gin.Context) {
 
 	email := h.currentUserEmail(c)
 	isAdmin := false
-	for _, admin := range h.cfg.AdminEmails {
-		if strings.EqualFold(strings.TrimSpace(admin), email) {
-			isAdmin = true
-			break
+	if h.isMockAuth(c) {
+		isAdmin = h.cfg.MockUserAdmin
+	} else {
+		for _, admin := range h.cfg.AdminEmails {
+			if strings.EqualFold(strings.TrimSpace(admin), email) {
+				isAdmin = true
+				break
+			}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true, "signedIn": true, "uid": uid, "email": email, "isAdmin": isAdmin})
 }
 
-// currentUser extracts the user ID from X-User-ID header or Firebase token.
+// currentUser extracts the user ID from X-User-ID header, mock auth, or Firebase token.
 func (h *Handler) currentUser(c *gin.Context) string {
+	if h.isMockAuth(c) {
+		return h.cfg.MockUserID
+	}
 	if id := c.GetHeader("X-User-ID"); id != "" {
 		return id
 	}
@@ -146,6 +153,9 @@ func (h *Handler) currentUser(c *gin.Context) string {
 }
 
 func (h *Handler) currentUserEmail(c *gin.Context) string {
+	if h.isMockAuth(c) {
+		return h.cfg.MockUserEmail
+	}
 	uid := h.currentUser(c)
 	if uid == "" || h.firebase == nil {
 		return ""
@@ -155,4 +165,16 @@ func (h *Handler) currentUserEmail(c *gin.Context) string {
 		return ""
 	}
 	return email
+}
+
+// isMockAuth returns true when mock authentication is enabled and the caller
+// supplied the expected secret key (if one is configured).
+func (h *Handler) isMockAuth(c *gin.Context) bool {
+	if !h.cfg.MockAuthEnabled {
+		return false
+	}
+	if h.cfg.MockAuthKey != "" && c.GetHeader("X-Mock-Auth-Key") != h.cfg.MockAuthKey {
+		return false
+	}
+	return true
 }
