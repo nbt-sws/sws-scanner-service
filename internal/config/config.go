@@ -56,7 +56,7 @@ func Load() *Config {
 		GRPCPort:  getEnv("GRPC_PORT", "9090"),
 		DBURL:     getEnv("DATABASE_URL", ""),
 		RedisAddr: getEnv("REDIS_ADDR", "localhost:6379"),
-		NATSURL:   getEnv("NATS_URL", "nats://localhost:4222"),
+		NATSURL:   getEnv("NATS_URL", ""),
 		LogLevel:  getEnv("LOG_LEVEL", "info"),
 
 		FirebaseServiceAccountB64: getEnv("FIREBASE_SERVICE_ACCOUNT_B64", ""),
