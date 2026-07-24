@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch missing Pokemon sets that timed out."""
 import os
 import time
@@ -9,10 +9,9 @@ from decimal import Decimal, InvalidOperation
 import psycopg2
 from psycopg2.extras import execute_values
 
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://neondb_owner:npg_0P9uMKUYgTSZ@ep-dry-dew-amvkqf9w-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-)
+from db_config import get_db_url
+
+DB_URL = get_db_url()
 BASE_URL = "https://api.pokemontcg.io/v2"
 GAME_ID = 2
 

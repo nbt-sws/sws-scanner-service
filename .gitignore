@@ -5,3 +5,5 @@ server.exe
 *.log
 out/
 dist/
+
+__pycache__/

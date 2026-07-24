@@ -9,14 +9,19 @@ Follows the standard SWS Go service layout:
 ```
 cmd/server/          # HTTP entrypoint
 internal/config/     # Environment config
-internal/delivery/http/  # Gin handlers and routing
-internal/domain/     # Entity definitions
-internal/usecase/    # Business logic (scan, image, pricing, variants, marketplace, auctions)
-internal/repository/ # Postgres implementations
-internal/infrastructure/ # DB, Firebase, NATS, Vision, Anthropic, eBay clients
-migrations/          # Embedded SQL migrations
-static/              # DON/CN-anniv/logos reference assets
-data/                # Catalog JSON files
+internal/delivery/http/  # Gin handlers and routing (gRPC disabled, see internal/delivery/_grpc)
+internal/health/     # /healthz and /readyz probes
+internal/usecase/    # Business logic (scan, image, pricing, variants, marketplace, auctions,
+                     # contributions, visualmatch, utility). Postgres queries live here.
+internal/infrastructure/ # DB (pgx), Firebase, NATS, Vision, Anthropic, eBay clients
+migrations/          # Embedded SQL migrations (auto-applied on startup)
+static/              # DON/CN-anniv/logos official sample reference assets
+data/                # Catalog JSON files (DON!! PDF + CN anniversary official samples)
+
+# Python TCG catalog tools (separate from the Go service; share the same Postgres DB):
+api.py               # FastAPI CRUD over the TCG catalog (games/sets/cards/card_variants, see schema.sql)
+scraper*.py, image_fallback.py, fetch_missing_pokemon.py  # Catalog importers / image backfill
+db_config.py         # Shared DATABASE_URL loader (env or .env) for the Python tools
 ```
 
 ## Quick start
@@ -105,4 +110,4 @@ docker run -p 8080:8080 -e DATABASE_URL=... sws-scanner-service
 
 ## gRPC
 
-A proto contract is prepared in `sws-shared-protos/proto/scanner/v1/scanner.proto` for future internal service calls. The HTTP server is currently the only exposed interface.
+A proto contract is prepared in `sws-shared-protos/proto/scanner/v1/scanner.proto` for future internal service calls. The gRPC server is currently disabled (`internal/delivery/_grpc`); the HTTP server is the only exposed interface.

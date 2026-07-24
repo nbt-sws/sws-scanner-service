@@ -1,7 +1,13 @@
 ﻿#!/usr/bin/env python3
 """
-TCG Card Scraper - One Piece TCG (Batch Optimized v2)
-Fetches card data from optcgapi.com and stores in PostgreSQL using batch inserts.
+TCG Card Scraper - One Piece TCG (Complete v3)
+Fetches ALL card data including detailed promo variants from optcgapi.com
+and stores in PostgreSQL using batch inserts.
+
+Key improvements over v2:
+- Fetches /api/promos/card/{P-xxx}/ for each P- ID to get all variants
+- Handles missing images gracefully
+- More complete data coverage
 """
 import os
 import re
@@ -74,28 +80,20 @@ def fetch_json(url, retries=3, delay=1):
 
 # â”€â”€ Normalize set_code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def normalize_set_code(raw_code):
-    """
-    Normalize set codes like OP01 -> OP-01, ST01 -> ST-01, ST-29 -> ST-29,
-    EB01 -> EB-01, PRB01 -> PRB-01, etc.
-    """
     if not raw_code:
         return "UNKNOWN"
     raw = str(raw_code).strip()
-    # Already has dash, keep as is
     if "-" in raw:
         return raw
-    # Match patterns: OP01, ST01, EB01, PRB01, OP1, etc.
     m = re.match(r'^(OP|ST|EB|PRB)(\d+)$', raw, re.IGNORECASE)
     if m:
         prefix = m.group(1).upper()
         num = m.group(2)
         return f"{prefix}-{num.zfill(2)}"
-    # Single letters or other formats
     return raw.upper()
 
 # â”€â”€ Batch insert helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def insert_sets(conn, sets_data):
-    """sets_data: [(game_id, set_code, set_name, set_type, card_count)]"""
     with conn.cursor() as cur:
         execute_values(cur, """
             INSERT INTO sets (game_id, set_code, set_name, set_type, card_count)
@@ -114,7 +112,6 @@ def get_set_id_map(conn):
         return {row[1]: row[0] for row in cur.fetchall()}
 
 def insert_cards(conn, cards_data):
-    """cards_data: list of tuples."""
     with conn.cursor() as cur:
         execute_values(cur, """
             INSERT INTO cards (game_id, set_id, card_set_id, card_name, card_text,
@@ -142,14 +139,11 @@ def insert_cards(conn, cards_data):
     conn.commit()
 
 def get_card_id_map(conn):
-    """Return dict mapping (card_set_id, set_id) -> card_id."""
     with conn.cursor() as cur:
         cur.execute("SELECT id, card_set_id, set_id FROM cards WHERE game_id = %s", (GAME_ID,))
         return {(row[1], row[2]): row[0] for row in cur.fetchall()}
 
 def insert_variants(conn, variants_data):
-    """variants_data: list of tuples (card_id, variant_code, variant_name, card_image,
-        card_image_id, market_price, inventory_price, date_scraped)"""
     with conn.cursor() as cur:
         execute_values(cur, """
             INSERT INTO card_variants (card_id, variant_code, variant_name, card_image,
@@ -164,10 +158,57 @@ def insert_variants(conn, variants_data):
                 date_scraped = EXCLUDED.date_scraped,
                 updated_at = NOW()
         """, variants_data)
+    conn.commit()
+
+# â”€â”€ Process a single card item into card tuple + variant tuple â”€â”€
+def process_card_item(item, set_id, source="optcgapi"):
+    """Returns (card_tuple, list_of_variant_tuples)"""
+    card_set_id = safe_str(item.get("card_set_id") or item.get("optcg_don_name") or item.get("card_image_id"), 100)
+    card_name = safe_str(item.get("card_name"), 500)
+    card_text = item.get("card_text")
+    card_type = safe_str(item.get("card_type"), 50)
+    card_color = safe_str(item.get("card_color"), 50)
+    rarity = safe_str(item.get("rarity"), 20)
+    card_cost = safe_str(item.get("card_cost"), 20)
+    card_power = safe_str(item.get("card_power"), 20)
+    life = safe_str(item.get("life"), 20)
+    counter_amount = safe_str(item.get("counter_amount"), 20)
+    attribute = safe_str(item.get("attribute"), 100)
+    sub_types = safe_str(item.get("sub_types"), 300)
+    card_image = item.get("card_image")
+    card_image_id = safe_str(item.get("card_image_id"), 100)
+    date_scraped = parse_date(item.get("date_scraped"))
+
+    card_tuple = (
+        GAME_ID, set_id, card_set_id, card_name, card_text,
+        card_type, card_color, rarity, card_cost, card_power, life,
+        counter_amount, attribute, sub_types, card_image, card_image_id,
+        date_scraped, source
+    )
+
+    variant_code = card_image_id or card_set_id
+    variant_name = card_name
+    market_price = to_decimal(item.get("market_price"))
+    inventory_price = to_decimal(item.get("inventory_price"))
+    variant_tuple = (
+        None, variant_code, variant_name, card_image, card_image_id,
+        market_price, inventory_price, date_scraped, (card_set_id, set_id)
+    )
+
+    return card_tuple, variant_tuple
+
+# â”€â”€ Fetch detailed promo variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+def fetch_promo_variants(p_id, delay=0.5):
+    """Fetch all variants for a specific P- ID from /api/promos/card/{p_id}/"""
+    url = f"{BASE_URL}/promos/card/{p_id}/"
+    data = fetch_json(url)
+    if delay:
+        time.sleep(delay)
+    return data or []
 
 # â”€â”€ Main scraper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def main():
-    print("TCG Card Scraper - One Piece TCG (Batch Optimized v2)")
+    print("TCG Card Scraper - One Piece TCG (Complete v3)")
     print(f"DB: {DB_URL[:60]}...")
     print(f"API: {BASE_URL}")
     print()
@@ -195,7 +236,7 @@ def main():
     print(f"allPromos: {len(all_promos)}")
     print(f"allDonCards: {len(all_don)}")
 
-    # Step 2: Collect all unique set_codes from raw data (including card data)
+    # Step 2: Collect all unique set_codes from raw data
     all_raw_cards = all_set_cards + all_st_cards + all_promos + all_don
     set_codes_from_cards = set()
     for item in all_raw_cards:
@@ -224,60 +265,90 @@ def main():
     set_id_map = get_set_id_map(conn)
     print(f"Set ID map: {len(set_id_map)} entries.")
 
-    # Step 3: Process and deduplicate cards
-    print("\n=== Processing cards ===")
-    card_dict = {}  # key: (card_set_id, set_id) -> card tuple
-    variant_list = []  # list of variant tuples
+    # Step 3: Process regular cards (non-promo)
+    print("\n=== Processing regular cards ===")
+    regular_cards = all_set_cards + all_st_cards + all_don
+    card_dict = {}
+    variant_list = []
 
-    for item in all_raw_cards:
+    for item in regular_cards:
         raw_set_code = item.get("set_id")
-        set_code = normalize_set_code(raw_set_code) if raw_set_code else "P" if item in all_promos else "DON"
+        set_code = normalize_set_code(raw_set_code) if raw_set_code else "DON"
         set_id = set_id_map.get(set_code)
         if set_id is None:
-            print(f"  Warning: set_code '{set_code}' (raw: '{raw_set_code}') not found in set_id_map")
+            print(f"  Warning: set_code '{set_code}' not found")
             continue
 
-        card_set_id = safe_str(item.get("card_set_id") or item.get("optcg_don_name") or item.get("card_image_id"), 100)
-        card_name = safe_str(item.get("card_name"), 500)
-        card_text = item.get("card_text")
-        card_type = safe_str(item.get("card_type"), 50)
-        card_color = safe_str(item.get("card_color"), 50)
-        rarity = safe_str(item.get("rarity"), 20)
-        card_cost = safe_str(item.get("card_cost"), 20)
-        card_power = safe_str(item.get("card_power"), 20)
-        life = safe_str(item.get("life"), 20)
-        counter_amount = safe_str(item.get("counter_amount"), 20)
-        attribute = safe_str(item.get("attribute"), 100)
-        sub_types = safe_str(item.get("sub_types"), 300)
-        card_image = item.get("card_image")
-        card_image_id = safe_str(item.get("card_image_id"), 100)
-        date_scraped = parse_date(item.get("date_scraped"))
-        source = "optcgapi"
-
-        key = (card_set_id, set_id)
-        card_tuple = (
-            GAME_ID, set_id, card_set_id, card_name, card_text,
-            card_type, card_color, rarity, card_cost, card_power, life,
-            counter_amount, attribute, sub_types, card_image, card_image_id,
-            date_scraped, source
-        )
+        card_tuple, variant_tuple = process_card_item(item, set_id)
+        key = (card_tuple[2], set_id)  # (card_set_id, set_id)
         card_dict[key] = card_tuple
+        variant_list.append(variant_tuple)
 
-        # Variant
-        variant_code = card_image_id or card_set_id
-        variant_name = card_name
-        market_price = to_decimal(item.get("market_price"))
-        inventory_price = to_decimal(item.get("inventory_price"))
-        variant_list.append((
-            None, variant_code, variant_name, card_image, card_image_id,
-            market_price, inventory_price, date_scraped, key
-        ))
+    print(f"Regular cards: {len(card_dict)} unique, {len(variant_list)} variants")
 
-    all_cards = list(card_dict.values())
-    print(f"Total unique cards to insert: {len(all_cards)}")
-    print(f"Total variants to insert: {len(variant_list)}")
+    # Step 4: Process promo cards with detailed variants
+    print("\n=== Processing promo cards with detailed variants ===")
+    # Get unique P- IDs from allPromos
+    p_ids = sorted(set(
+        item.get("card_set_id") for item in all_promos
+        if item.get("card_set_id", "").startswith("P-")
+    ))
+    print(f"Unique P- IDs found: {len(p_ids)}")
 
-    # Step 4: Insert cards
+    promo_card_dict = {}
+    promo_variant_list = []
+    missing_images_count = 0
+
+    for idx, p_id in enumerate(p_ids, 1):
+        variants = fetch_promo_variants(p_id, delay=0.3)
+        if not variants:
+            print(f"  [{idx}/{len(p_ids)}] {p_id}: NO variants found")
+            continue
+
+        print(f"  [{idx}/{len(p_ids)}] {p_id}: {len(variants)} variants", end="")
+
+        # The first variant is the base card
+        base_variant = variants[0]
+        set_id = set_id_map.get("P")
+
+        card_tuple, _ = process_card_item(base_variant, set_id)
+        key = (card_tuple[2], set_id)
+        promo_card_dict[key] = card_tuple
+
+        # All entries are variants
+        for v in variants:
+            card_set_id = safe_str(v.get("card_set_id") or v.get("card_image_id"), 100)
+            variant_code = safe_str(v.get("card_image_id"), 100) or card_set_id
+            variant_name = safe_str(v.get("card_name"), 500)
+            card_image = v.get("card_image")
+            card_image_id = safe_str(v.get("card_image_id"), 100)
+            market_price = to_decimal(v.get("market_price"))
+            inventory_price = to_decimal(v.get("inventory_price"))
+            date_scraped = parse_date(v.get("date_scraped"))
+
+            if not card_image:
+                missing_images_count += 1
+
+            promo_variant_list.append((
+                None, variant_code, variant_name, card_image, card_image_id,
+                market_price, inventory_price, date_scraped, key
+            ))
+
+        print(f" (missing images: {missing_images_count})")
+
+    print(f"\nPromo cards: {len(promo_card_dict)} unique")
+    print(f"Promo variants: {len(promo_variant_list)}")
+    print(f"Total missing images: {missing_images_count}")
+
+    # Merge regular and promo
+    all_card_dict = {**card_dict, **promo_card_dict}
+    all_variant_list = variant_list + promo_variant_list
+
+    all_cards = list(all_card_dict.values())
+    print(f"\nTotal unique cards to insert: {len(all_cards)}")
+    print(f"Total variants to insert: {len(all_variant_list)}")
+
+    # Step 5: Insert cards
     print("\n=== Inserting cards ===")
     insert_cards(conn, all_cards)
     print(f"Inserted/updated {len(all_cards)} cards.")
@@ -286,10 +357,10 @@ def main():
     card_id_map = get_card_id_map(conn)
     print(f"Card ID map: {len(card_id_map)} entries.")
 
-    # Step 5: Build final variants with card_id (deduplicate)
+    # Step 6: Build final variants with card_id
     print("\n=== Inserting variants ===")
     final_variants_dict = {}
-    for v in variant_list:
+    for v in all_variant_list:
         _, variant_code, variant_name, card_image, card_image_id, market_price, inventory_price, date_scraped, key = v
         card_id = card_id_map.get(key)
         if card_id:
@@ -302,9 +373,8 @@ def main():
 
     insert_variants(conn, final_variants)
     print(f"Inserted/updated {len(final_variants)} variants.")
-    conn.commit()
 
-    # Step 6: Update card counts
+    # Step 7: Update card counts
     print("\n=== Updating set card counts ===")
     set_counts = defaultdict(int)
     for item in all_raw_cards:
@@ -319,11 +389,18 @@ def main():
                 cur.execute("UPDATE sets SET card_count = %s WHERE id = %s", (count, set_id))
     conn.commit()
 
-    conn.close()
-    print(f"\n=== DONE ===")
-    print(f"Total cards: {len(all_cards)}")
+    # Step 8: Summary stats
+    print("\n" + "="*50)
+    print("SUMMARY")
+    print("="*50)
+    print(f"Total sets: {len(sets_to_insert)}")
+    print(f"Total unique cards: {len(all_cards)}")
     print(f"Total variants: {len(final_variants)}")
-    print("Database connection closed.")
+    print(f"Promo P- IDs: {len(p_ids)}")
+    print(f"Missing images: {missing_images_count}")
+
+    conn.close()
+    print("\nDatabase connection closed.")
 
 if __name__ == "__main__":
     main()

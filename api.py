@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 TCG Card API - FastAPI CRUD
 One Piece TCG Card Database API
@@ -12,16 +12,15 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# ── Config ───────────────────────────────────────────────────────
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://neondb_owner:npg_0P9uMKUYgTSZ@ep-dry-dew-amvkqf9w-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-)
+# â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+from db_config import get_db_url
+
+DB_URL = get_db_url()
 
 engine = create_engine(DB_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# ── Pydantic Models ────────────────────────────────────────────
+# â”€â”€ Pydantic Models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class GameOut(BaseModel):
     id: int
     slug: str
@@ -112,7 +111,7 @@ class CardUpdate(BaseModel):
     card_image: Optional[str] = None
     card_image_id: Optional[str] = None
 
-# ── FastAPI App ─────────────────────────────────────────────────
+# â”€â”€ FastAPI App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -131,7 +130,7 @@ def get_db():
     finally:
         db.close()
 
-# ── Games ──────────────────────────────────────────────────────
+# â”€â”€ Games â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/games", response_model=List[GameOut])
 def list_games():
     with SessionLocal() as db:
@@ -148,7 +147,7 @@ def get_game(slug: str):
             raise HTTPException(status_code=404, detail="Game not found")
         return dict(row)
 
-# ── Sets ────────────────────────────────────────────────────────
+# â”€â”€ Sets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/sets", response_model=List[SetOut])
 def list_sets(
     game_id: Optional[int] = Query(None, description="Filter by game ID"),
@@ -184,7 +183,7 @@ def get_set(set_id: int):
             raise HTTPException(status_code=404, detail="Set not found")
         return dict(row)
 
-# ── Cards ───────────────────────────────────────────────────────
+# â”€â”€ Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/cards", response_model=List[CardOut])
 def list_cards(
     game_id: Optional[int] = Query(None, description="Filter by game ID"),
@@ -318,7 +317,7 @@ def delete_card(card_id: int):
         db.commit()
         return {"message": "Card deleted successfully", "card_id": card_id}
 
-# ── Variants ────────────────────────────────────────────────────
+# â”€â”€ Variants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/variants/{variant_id}", response_model=CardVariantOut)
 def get_variant(variant_id: int):
     with SessionLocal() as db:
@@ -332,7 +331,7 @@ def get_variant(variant_id: int):
             raise HTTPException(status_code=404, detail="Variant not found")
         return dict(row)
 
-# ── Stats ───────────────────────────────────────────────────────
+# â”€â”€ Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/stats")
 def get_stats():
     with SessionLocal() as db:
@@ -347,7 +346,7 @@ def get_stats():
             "variants": variants
         }
 
-# ── Run ─────────────────────────────────────────────────────────
+# â”€â”€ Run â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -143,4 +143,6 @@ CREATE INDEX idx_translations_language ON card_translations(language);
 INSERT INTO games (slug, name, description) VALUES
     ('onepiece', 'One Piece Card Game', 'One Piece Trading Card Game by Bandai'),
     ('pokemon', 'Pokemon TCG', 'Pokemon Trading Card Game'),
+    ('lorcana', 'Disney Lorcana TCG', 'Disney Lorcana Trading Card Game'),
+    ('yugioh', 'Yu-Gi-Oh! TCG', 'Yu-Gi-Oh! Trading Card Game'),
     ('digimon', 'Digimon Card Game', 'Digimon Trading Card Game');

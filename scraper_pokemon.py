@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 TCG Card Scraper - Pokemon TCG (Focused Sets)
 Fetches recent and popular sets to stay within time limits.
@@ -13,11 +13,10 @@ from collections import defaultdict
 import psycopg2
 from psycopg2.extras import execute_values
 
-# ── Config ───────────────────────────────────────────────────────
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://neondb_owner:npg_0P9uMKUYgTSZ@ep-dry-dew-amvkqf9w-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-)
+# â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+from db_config import get_db_url
+
+DB_URL = get_db_url()
 BASE_URL = "https://api.pokemontcg.io/v2"
 GAME_ID = 2
 PAGE_SIZE = 250
@@ -28,7 +27,7 @@ TARGET_SERIES = [
 ]
 CLASSIC_SETS = ["base1", "base2", "base3"]  # Base, Jungle, Fossil
 
-# ── DB helpers ─────────────────────────────────────────────────
+# â”€â”€ DB helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def get_conn():
     return psycopg2.connect(DB_URL)
 
@@ -57,7 +56,7 @@ def parse_date(val):
         except Exception:
             return None
 
-# ── Fetch helpers ──────────────────────────────────────────────
+# â”€â”€ Fetch helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def fetch_json(url, retries=2, delay=1):
     for attempt in range(retries):
         try:
@@ -85,7 +84,7 @@ def fetch_all_cards_for_set(set_id):
         # time.sleep(0.05)
     return all_cards
 
-# ── Set type classifier ────────────────────────────────────────
+# â”€â”€ Set type classifier â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def classify_set_type(set_data):
     name = set_data.get("name", "").lower()
     series = set_data.get("series", "").lower()
@@ -98,7 +97,7 @@ def classify_set_type(set_data):
         return "special"
     return "booster"
 
-# ── Build card text ────────────────────────────────────────────
+# â”€â”€ Build card text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def build_card_text(card):
     parts = []
     if card.get("flavorText"):
@@ -125,7 +124,7 @@ def build_card_text(card):
             parts.append(f"[Rule] {rule}")
     return "\n".join(parts) if parts else None
 
-# ── Batch insert helpers ───────────────────────────────────────
+# â”€â”€ Batch insert helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def insert_sets(conn, sets_data):
     with conn.cursor() as cur:
         execute_values(cur, """
@@ -194,7 +193,7 @@ def insert_variants(conn, variants_data):
         """, variants_data)
     conn.commit()
 
-# ── Main scraper ───────────────────────────────────────────────
+# â”€â”€ Main scraper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 def main():
     print("TCG Card Scraper - Pokemon TCG (Focused Sets)")
     print(f"DB: {DB_URL[:60]}...")
